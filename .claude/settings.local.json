@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sL https://registry.npmjs.org/@ff-labs/fff-bun/latest)",
+      "Bash(curl -sL https://registry.npmjs.org/@tobilu/qmd/latest)",
+      "Bash(bun *)",
+      "WebFetch(domain:effect.website)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh repo *)",
+      "Read(//tmp/**)",
+      "Bash(git clone *)"
+    ]
+  }
+}

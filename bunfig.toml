@@ -1,0 +1,6 @@
+# Preload is kept out of the top-level so `bun build --compile` doesn't
+# bake it into the compiled binary (the compiled binary has JSX
+# transformed at build time via @opentui/solid/bun-plugin and doesn't
+# need the runtime preload). Dev and tests opt in explicitly.
+[test]
+preload = ["@opentui/solid/preload"]

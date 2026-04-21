@@ -1,0 +1,33 @@
+{
+  "name": "findfile",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "findfile": "./src/bin/findfile.ts"
+  },
+  "scripts": {
+    "dev": "bun --preload @opentui/solid/preload src/bin/findfile.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun run scripts/build-all.ts"
+  },
+  "dependencies": {
+    "@effect/cli": "latest",
+    "@effect/platform": "latest",
+    "@effect/platform-bun": "latest",
+    "@ff-labs/fff-bun": "latest",
+    "@opentui/core": "latest",
+    "@opentui/solid": "latest",
+    "@tobilu/qmd": "latest",
+    "effect": "latest",
+    "ignore": "latest",
+    "smol-toml": "latest",
+    "solid-js": "latest"
+  },
+  "devDependencies": {
+    "@effect/language-service": "latest",
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}
