@@ -45,10 +45,7 @@ export const makeDebouncedRunner = (
           yield* Stream.runForEach(stream, onResult)
         }).pipe(
           Effect.catchAll((err) =>
-            Effect.sync(() => {
-              // eslint-disable-next-line no-console
-              console.error("[findfile] search stream error:", err)
-            }),
+            Effect.logError(`search stream error: ${String(err)}`),
           ),
         )
         // forkDaemon so the body outlives the runner.run() call

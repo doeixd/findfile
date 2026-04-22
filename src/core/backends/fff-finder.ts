@@ -1,4 +1,4 @@
-import { Effect, LogLevel, Logger } from "effect"
+import { Effect } from "effect"
 import { FileFinder } from "@ff-labs/fff-bun"
 import { FileSystem } from "@effect/platform"
 import path from "node:path"
@@ -135,37 +135,40 @@ export class FffFinder extends Effect.Service<FffFinder>()("findfile/FffFinder",
       readonly isWarmupComplete: boolean
     }
 
-    const getScanProgress = (cwd: SearchPath): ScanProgress => {
-      const finder = cache.get(cwd)
-      if (finder === undefined) {
-        Effect.runSync(Effect.logDebug(`getScanProgress: no finder cached for ${cwd}`))
+    const getScanProgress = (cwd: SearchPath): Effect.Effect<ScanProgress> =>
+      Effect.gen(function* () {
+        const finder = cache.get(cwd)
+        if (finder === undefined) {
+          yield* Effect.logDebug(`getScanProgress: no finder cached for ${cwd}`)
+          return {
+            scannedFilesCount: 0,
+            isScanning: true,
+            isWatcherReady: false,
+            isWarmupComplete: false,
+          }
+        }
+        try {
+          const raw = (finder as unknown as {
+            getScanProgress: () => { ok: true; value: ScanProgress } | { ok: false; error: string }
+          }).getScanProgress()
+          yield* Effect.logDebug(`getScanProgress for ${cwd}: ok=${raw.ok}`)
+          if (raw.ok) {
+            yield* Effect.logDebug(
+              `getScanProgress for ${cwd}: isScanning=${raw.value.isScanning} warmup=${raw.value.isWarmupComplete} scanned=${raw.value.scannedFilesCount}`,
+            )
+            return raw.value
+          }
+          yield* Effect.logWarning(`getScanProgress for ${cwd} failed: ${raw.error}`)
+        } catch (e) {
+          yield* Effect.logWarning(`getScanProgress for ${cwd} threw: ${String(e)}`)
+        }
         return {
           scannedFilesCount: 0,
-          isScanning: true,
-          isWatcherReady: false,
-          isWarmupComplete: false,
+          isScanning: false,
+          isWatcherReady: true,
+          isWarmupComplete: true,
         }
-      }
-      try {
-        const raw = (finder as unknown as {
-          getScanProgress: () => { ok: true; value: ScanProgress } | { ok: false; error: string }
-        }).getScanProgress()
-        Effect.runSync(Effect.logDebug(`getScanProgress for ${cwd}: ok=${raw.ok}`))
-        if (raw.ok) {
-          Effect.runSync(Effect.logDebug(`getScanProgress for ${cwd}: isScanning=${raw.value.isScanning} isWarmupComplete=${raw.value.isWarmupComplete} scanned=${raw.value.scannedFilesCount}`))
-          return raw.value
-        }
-        Effect.runSync(Effect.logWarning(`getScanProgress for ${cwd} failed: ${raw.error}`))
-      } catch (e) {
-        Effect.runSync(Effect.logWarning(`getScanProgress for ${cwd} threw: ${String(e)}`))
-      }
-      return {
-        scannedFilesCount: 0,
-        isScanning: false,
-        isWatcherReady: true,
-        isWarmupComplete: true,
-      }
-    }
+      })
 
     return { get, trackQuery, getScanProgress }
   }),

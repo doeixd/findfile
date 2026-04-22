@@ -5,14 +5,14 @@ import type { AppDeps } from "./state.ts"
 import type { QueryRouter } from "#core/query/router.ts"
 import type { PreviewService } from "#core/preview/file.ts"
 import type { FffFinder } from "#core/backends/fff-finder.ts"
-import type { SearchResult, SearchPath, Mode } from "#core/schema.ts"
+import type { SearchResult, SearchPath, Mode, Source } from "#core/schema.ts"
 
 const makeResult = (path: string): SearchResult => ({
   path: path as unknown as SearchPath,
   relativePath: path,
   kind: "file",
   score: 1,
-  source: "fff" as unknown as SearchPath,
+  source: "fff" as unknown as Source,
 })
 
 const makeDeps = (overrides: Partial<AppDeps> = {}): AppDeps => {
@@ -27,7 +27,7 @@ const makeDeps = (overrides: Partial<AppDeps> = {}): AppDeps => {
   const finder: FffFinder = {
     get: () => Effect.succeed({} as unknown as Awaited<ReturnType<FffFinder["get"]>>),
     trackQuery: () => Effect.succeed(undefined),
-    getScanProgress: () => ({
+    getScanProgress: () => Effect.succeed({
       scannedFilesCount: 0,
       isScanning: false,
       isWatcherReady: true,
@@ -79,12 +79,12 @@ describe("createAppState cwd change", () => {
   test("setCwd calls finder.get for the new cwd", () => {
     let getCalls: string[] = []
     const finder: FffFinder = {
-      get: (cwd) => {
+      get: (cwd: SearchPath) => {
         getCalls.push(cwd as string)
         return Effect.succeed({} as unknown as Awaited<ReturnType<FffFinder["get"]>>)
       },
       trackQuery: () => Effect.succeed(undefined),
-      getScanProgress: () => ({
+      getScanProgress: () => Effect.succeed({
         scannedFilesCount: 10,
         isScanning: false,
         isWatcherReady: true,
@@ -109,7 +109,7 @@ describe("createAppState cwd change", () => {
   test("pollScan triggers search when scan completes", async () => {
     let searchCwd: string | null = null
     const router: QueryRouter = {
-      search: (q) => {
+      search: (q: { cwd: SearchPath }) => {
         searchCwd = q.cwd as string
         return Stream.empty
       },
@@ -118,7 +118,7 @@ describe("createAppState cwd change", () => {
     const finder: FffFinder = {
       get: () => Effect.succeed({} as unknown as Awaited<ReturnType<FffFinder["get"]>>),
       trackQuery: () => Effect.succeed(undefined),
-      getScanProgress: () => ({
+      getScanProgress: () => Effect.succeed({
         scannedFilesCount: 10,
         isScanning: false,
         isWarmupComplete: true,
@@ -133,14 +133,14 @@ describe("createAppState cwd change", () => {
     // it should trigger a search
     await new Promise((r) => setTimeout(r, 300))
 
-    expect(searchCwd).toBe("/changed")
+    expect(searchCwd!).toBe("/changed")
     state.cleanup()
   })
 
   test("pollScan uses updated cwd signal, not initial deps.cwd", async () => {
     let searchCwd: string | null = null
     const router: QueryRouter = {
-      search: (q) => {
+      search: (q: { cwd: SearchPath }) => {
         searchCwd = q.cwd as string
         return Stream.empty
       },
@@ -149,7 +149,7 @@ describe("createAppState cwd change", () => {
     const finder: FffFinder = {
       get: () => Effect.succeed({} as unknown as Awaited<ReturnType<FffFinder["get"]>>),
       trackQuery: () => Effect.succeed(undefined),
-      getScanProgress: () => ({
+      getScanProgress: () => Effect.succeed({
         scannedFilesCount: 10,
         isScanning: false,
         isWarmupComplete: true,
@@ -162,7 +162,7 @@ describe("createAppState cwd change", () => {
 
     await new Promise((r) => setTimeout(r, 300))
 
-    expect(searchCwd).toBe("/moved")
+    expect(searchCwd!).toBe("/moved")
     expect(state.cwd()).toBe("/moved")
     state.cleanup()
   })
@@ -170,7 +170,7 @@ describe("createAppState cwd change", () => {
   test("pollScan safety valve triggers search when backend is stuck", async () => {
     let searchCwd: string | null = null
     const router: QueryRouter = {
-      search: (q) => {
+      search: (q: { cwd: SearchPath }) => {
         searchCwd = q.cwd as string
         return Stream.empty
       },
@@ -180,7 +180,7 @@ describe("createAppState cwd change", () => {
       get: () => Effect.succeed({} as unknown as Awaited<ReturnType<FffFinder["get"]>>),
       trackQuery: () => Effect.succeed(undefined),
       // Always reports scanning — simulates a stuck backend
-      getScanProgress: () => ({
+      getScanProgress: () => Effect.succeed({
         scannedFilesCount: 0,
         isScanning: true,
         isWatcherReady: false,
@@ -201,9 +201,9 @@ describe("createAppState cwd change", () => {
   })
 
   test("setCwd resets pollCount so safety valve is fresh for each directory", async () => {
-    let searchCwds: string[] = []
+    const searchCwds: string[] = []
     const router: QueryRouter = {
-      search: (q) => {
+      search: (q: { cwd: SearchPath }) => {
         searchCwds.push(q.cwd as string)
         return Stream.empty
       },
@@ -212,7 +212,7 @@ describe("createAppState cwd change", () => {
     const finder: FffFinder = {
       get: () => Effect.succeed({} as unknown as Awaited<ReturnType<FffFinder["get"]>>),
       trackQuery: () => Effect.succeed(undefined),
-      getScanProgress: () => ({
+      getScanProgress: () => Effect.succeed({
         scannedFilesCount: 10,
         isScanning: false,
         isWarmupComplete: true,

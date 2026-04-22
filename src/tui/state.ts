@@ -106,6 +106,12 @@ export interface AppDeps {
  * new preview via the provided Effect runtime.
  */
 export const createAppState = (deps: AppDeps): AppState => {
+  /** Log through the Effect runtime so messages go to the configured
+   *  file logger instead of corrupting the TUI with console output. */
+  const log = (message: string) => {
+    Runtime.runSync(deps.runtime)(Effect.log(message))
+  }
+
   const [query, setQuery] = createSignal("")
   const [mode, setMode] = createSignal<Mode>(deps.initialMode)
   const [results, setResults] = createSignal<readonly SearchResult[]>([])
@@ -151,12 +157,14 @@ export const createAppState = (deps: AppDeps): AppState => {
     try {
       pollCount++
       const currentCwd = cwd()
-      const progress = deps.finder.getScanProgress(SearchPath.make(currentCwd))
+      const progress = Runtime.runSync(deps.runtime)(
+        deps.finder.getScanProgress(SearchPath.make(currentCwd)),
+      )
       setScanProgress(progress)
 
       if (pollCount <= 5 || pollCount % 10 === 0) {
-        console.log(
-          `[findfile] pollScan #${pollCount} cwd=${currentCwd} isScanning=${progress.isScanning} warmup=${progress.isWarmupComplete} scanned=${progress.scannedFilesCount}`,
+        log(
+          `pollScan #${pollCount} cwd=${currentCwd} isScanning=${progress.isScanning} warmup=${progress.isWarmupComplete} scanned=${progress.scannedFilesCount}`,
         )
       }
 
@@ -164,7 +172,7 @@ export const createAppState = (deps: AppDeps): AppState => {
       // automatically re-run the search so the user doesn't have to type again.
       const currentQuery = query()
       if (wasScanning && !progress.isScanning && progress.isWarmupComplete) {
-        console.log("[findfile] scan complete, triggering search for", currentQuery)
+        log(`scan complete, triggering search for "${currentQuery}"`)
         if (currentQuery.length > 0) {
           runSearch(currentQuery, mode())
         } else {
@@ -179,18 +187,18 @@ export const createAppState = (deps: AppDeps): AppState => {
       if (keepPolling) {
         pollScanTimeout = setTimeout(pollScan, 200)
       } else {
-        console.log("[findfile] pollScan safety valve hit for", currentCwd)
+        log(`pollScan safety valve hit for ${currentCwd}`)
         // Even if the backend still claims isScanning, try searching.
         // getScanProgress can be conservative; fileSearch may already work.
         if (currentQuery.length > 0) {
-          console.log("[findfile] safety valve triggering search for", currentQuery)
+          log(`safety valve triggering search for "${currentQuery}"`)
           runSearch(currentQuery, mode())
         } else {
           setStatus("ready")
         }
       }
     } catch (e) {
-      console.error("[findfile] pollScan error:", e)
+      log(`pollScan error: ${String(e)}`)
       setScanProgress({
         scannedFilesCount: 0,
         isScanning: false,
@@ -382,14 +390,10 @@ export const createAppState = (deps: AppDeps): AppState => {
     // doesn't hit a cold index.
     Runtime.runFork(deps.runtime)(
       deps.finder.get(SearchPath.make(next)).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            console.log("[findfile] finder ready for", next)
-          }),
-        ),
+        Effect.tap(() => Effect.log(`finder ready for ${next}`)),
         Effect.tapError((e) =>
           Effect.sync(() => {
-            console.error("[findfile] finder creation failed for", next, ":", e)
+            log(`finder creation failed for ${next}: ${String(e)}`)
             setStatus(`index error: ${String(e)}`)
           }),
         ),
@@ -402,7 +406,7 @@ export const createAppState = (deps: AppDeps): AppState => {
       pollScanTimeout = null
     }
     wasScanning = true
-    console.log("[findfile] starting pollScan for new cwd:", next)
+    log(`starting pollScan for new cwd: ${next}`)
     pollScan()
     return next
   }

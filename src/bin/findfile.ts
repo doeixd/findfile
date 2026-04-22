@@ -22,6 +22,7 @@ import { PreviewService } from "#core/preview/file.ts"
 import { QueryRouter } from "#core/query/router.ts"
 import { Mode, SearchPath, type SearchFilters, type SearchQuery } from "#core/schema.ts"
 import { startTui } from "#tui/start.tsx"
+import { FileLoggerLive } from "#core/logger.ts"
 
 const queryArg = Args.text({ name: "query" }).pipe(Args.optional)
 
@@ -834,7 +835,10 @@ const AppLive = Layer.mergeAll(
   RgBackend.Default,
   FdBackend.Default,
   FffFinder.Default,
-).pipe(Layer.provideMerge(BunContext.layer))
+).pipe(
+  Layer.provideMerge(BunContext.layer),
+  Layer.provide(FileLoggerLive),
+)
 
 cli(process.argv).pipe(
   Effect.scoped,
