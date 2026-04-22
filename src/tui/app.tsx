@@ -176,9 +176,11 @@ export const App = (props: AppProps) => {
 
     // Breadcrumb path editing: Enter confirms, Escape cancels.
     // OpenTUI <input> doesn't support onSubmit, so we handle Enter here.
+    // IMPORTANT: only preventDefault for Enter/Escape — otherwise the
+    // focused input never receives printable keystrokes.
     if (props.state.breadcrumbEditing()) {
-      e.preventDefault()
       if (e.name === "return" || e.name === "enter") {
+        e.preventDefault()
         const v = props.state.breadcrumbEditValue().trim()
         if (v.length > 0) {
           try {
@@ -189,9 +191,15 @@ export const App = (props: AppProps) => {
           }
         }
         props.state.setBreadcrumbEditing(false)
-      } else if (e.name === "escape") {
-        props.state.setBreadcrumbEditing(false)
+        return
       }
+      if (e.name === "escape") {
+        e.preventDefault()
+        props.state.setBreadcrumbEditing(false)
+        return
+      }
+      // Let all other keys (letters, digits, backspace, arrows) pass
+      // through to the focused breadcrumb input.
       return
     }
 

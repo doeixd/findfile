@@ -1,4 +1,5 @@
-import { For, Show } from "solid-js"
+import { For, Show, createEffect } from "solid-js"
+import type { InputRenderable } from "@opentui/core"
 import { useTheme } from "../theme/syntax.ts"
 import { resolveColor, resolveSpacing } from "../theme/tokens.ts"
 
@@ -17,9 +18,9 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
   const { theme } = useTheme()
   const t = () => theme()
 
-  const bg = () => resolveColor(t(), "app", "app", "bg", "#0f172a")
-  const fg = () => resolveColor(t(), "results", "results", "fgPath", "#64748b")
-  const fgHover = () => resolveColor(t(), "results", "results", "fgLine", "#38bdf8")
+  const bg = () => resolveColor(t(), "queryInput", "app", "bg", "#0f172a")
+  const fg = () => resolveColor(t(), "queryInput", "results", "fgPath", "#64748b")
+  const fgHover = () => resolveColor(t(), "queryInput", "results", "fgLine", "#38bdf8")
   const padding = () => resolveSpacing(t(), "queryInput", "input", "padding", 1)
   const height = () => resolveSpacing(t(), "queryInput", "input", "height", 1)
 
@@ -45,6 +46,14 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
     return out
   }
 
+  let inputRef: InputRenderable | undefined
+
+  createEffect(() => {
+    if (props.editing) {
+      inputRef?.focus()
+    }
+  })
+
   const startEdit = () => {
     props.setEditValue(props.cwd)
     props.setEditing(true)
@@ -69,11 +78,10 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
                 {(seg, i) => (
                   <>
                     <Show when={i() > 0}>
-                      <text fg={fg()} dimColor> / </text>
+                      <text fg={fg()}> / </text>
                     </Show>
                     <text
                       fg={fg()}
-                      dimColor
                       onMouseDown={() => props.onNavigate(seg.target)}
                     >
                       {seg.label}
@@ -81,18 +89,12 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
                   </>
                 )}
               </For>
-              <box flexGrow={1} />
-              <text
-                fg={fg()}
-                dimColor
-                onMouseDown={startEdit}
-              >
-                [edit]
-              </text>
+              <box flexGrow={1} onMouseDown={startEdit} />
             </>
           }
         >
           <input
+            ref={(r) => { inputRef = r }}
             flexGrow={1}
             textColor={fgHover()}
             backgroundColor={bg()}
