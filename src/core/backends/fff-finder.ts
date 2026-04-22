@@ -80,6 +80,10 @@ export class FffFinder extends Effect.Service<FffFinder>()("findfile/FffFinder",
         )
       }
 
+      // Add to cache immediately so getScanProgress can report real
+      // progress instead of the generic fallback while waitForScan runs.
+      cache.set(cwd, created.value)
+
       // Wait for initial scan before returning the finder.
       // FileFinder returns 0 results while scanning; without this
       // the first search in the TUI appears broken (empty results).
@@ -88,7 +92,6 @@ export class FffFinder extends Effect.Service<FffFinder>()("findfile/FffFinder",
         console.error(`[fff] scan warmup timed out for ${cwd}`)
       }
 
-      cache.set(cwd, created.value)
       return created.value
     })
 

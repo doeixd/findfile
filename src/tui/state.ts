@@ -142,23 +142,32 @@ export const createAppState = (deps: AppDeps): AppState => {
   // Poll scan progress until complete
   let pollScanTimeout: ReturnType<typeof setTimeout> | null = null
   let wasScanning = true
+  let pollCount = 0
   const pollScan = () => {
     try {
+      pollCount++
       const progress = deps.finder.getScanProgress(SearchPath.make(cwd()))
       setScanProgress(progress)
 
-      // If scan just finished and we have a pending query with no results,
+      // If scan just finished and we have a pending query,
       // automatically re-run the search so the user doesn't have to type again.
       if (wasScanning && !progress.isScanning && progress.isWarmupComplete) {
         const currentQuery = query()
-        if (currentQuery.length > 0 && results().length === 0) {
+        if (currentQuery.length > 0) {
           runSearch(currentQuery, mode())
+        } else {
+          setStatus("ready")
         }
       }
       wasScanning = progress.isScanning
 
-      if (progress.isScanning) {
+      // Safety valve: stop polling after ~15s of no progress change
+      // to avoid spinning forever if the backend is stuck.
+      const keepPolling = progress.isScanning || pollCount < 75
+      if (keepPolling) {
         pollScanTimeout = setTimeout(pollScan, 200)
+      } else {
+        setStatus("ready")
       }
     } catch (e) {
       console.error("[findfile] pollScan error:", e)
@@ -342,10 +351,21 @@ export const createAppState = (deps: AppDeps): AppState => {
 
   const boundSetCwd = (v: string): string => {
     const next = setCwd(v)
+    // Clear stale results while the new directory indexes
+    setResults([])
+    setSelected(0)
+    setPreview(null)
+    setStatus("indexing...")
     // Pre-warm the finder for the new directory so the first search
     // doesn't hit a cold index.
     Runtime.runFork(deps.runtime)(
       deps.finder.get(SearchPath.make(next)).pipe(
+        Effect.tapError((e) =>
+          Effect.sync(() => {
+            console.error("[findfile] finder creation failed for", next, ":", e)
+            setStatus(`index error: ${String(e)}`)
+          }),
+        ),
         Effect.catchAll(() => Effect.succeed(undefined)),
       ),
     )
@@ -356,15 +376,6 @@ export const createAppState = (deps: AppDeps): AppState => {
     }
     wasScanning = true
     pollScan()
-    // Re-run current query in the new directory
-    if (query().length > 0) {
-      runSearch(query(), mode())
-    } else {
-      setResults([])
-      setSelected(0)
-      setPreview(null)
-      setStatus("ready")
-    }
     return next
   }
 
