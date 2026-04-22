@@ -150,13 +150,21 @@ export const createAppState = (deps: AppDeps): AppState => {
   const pollScan = () => {
     try {
       pollCount++
-      const progress = deps.finder.getScanProgress(SearchPath.make(cwd()))
+      const currentCwd = cwd()
+      const progress = deps.finder.getScanProgress(SearchPath.make(currentCwd))
       setScanProgress(progress)
+
+      if (pollCount <= 5 || pollCount % 10 === 0) {
+        console.log(
+          `[findfile] pollScan #${pollCount} cwd=${currentCwd} isScanning=${progress.isScanning} warmup=${progress.isWarmupComplete} scanned=${progress.scannedFilesCount}`,
+        )
+      }
 
       // If scan just finished and we have a pending query,
       // automatically re-run the search so the user doesn't have to type again.
+      const currentQuery = query()
       if (wasScanning && !progress.isScanning && progress.isWarmupComplete) {
-        const currentQuery = query()
+        console.log("[findfile] scan complete, triggering search for", currentQuery)
         if (currentQuery.length > 0) {
           runSearch(currentQuery, mode())
         } else {
@@ -171,7 +179,15 @@ export const createAppState = (deps: AppDeps): AppState => {
       if (keepPolling) {
         pollScanTimeout = setTimeout(pollScan, 200)
       } else {
-        setStatus("ready")
+        console.log("[findfile] pollScan safety valve hit for", currentCwd)
+        // Even if the backend still claims isScanning, try searching.
+        // getScanProgress can be conservative; fileSearch may already work.
+        if (currentQuery.length > 0) {
+          console.log("[findfile] safety valve triggering search for", currentQuery)
+          runSearch(currentQuery, mode())
+        } else {
+          setStatus("ready")
+        }
       }
     } catch (e) {
       console.error("[findfile] pollScan error:", e)
@@ -360,10 +376,17 @@ export const createAppState = (deps: AppDeps): AppState => {
     setSelected(0)
     setPreview(null)
     setStatus("indexing...")
+    // Reset poll count so the safety valve starts fresh for the new dir
+    pollCount = 0
     // Pre-warm the finder for the new directory so the first search
     // doesn't hit a cold index.
     Runtime.runFork(deps.runtime)(
       deps.finder.get(SearchPath.make(next)).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            console.log("[findfile] finder ready for", next)
+          }),
+        ),
         Effect.tapError((e) =>
           Effect.sync(() => {
             console.error("[findfile] finder creation failed for", next, ":", e)
@@ -379,6 +402,7 @@ export const createAppState = (deps: AppDeps): AppState => {
       pollScanTimeout = null
     }
     wasScanning = true
+    console.log("[findfile] starting pollScan for new cwd:", next)
     pollScan()
     return next
   }

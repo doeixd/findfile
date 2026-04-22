@@ -1,4 +1,4 @@
-import { Effect } from "effect"
+import { Effect, LogLevel, Logger } from "effect"
 import { FileFinder } from "@ff-labs/fff-bun"
 import { FileSystem } from "@effect/platform"
 import path from "node:path"
@@ -49,7 +49,12 @@ export class FffFinder extends Effect.Service<FffFinder>()("findfile/FffFinder",
 
     const get = Effect.fn("FffFinder.get")(function* (cwd: SearchPath) {
       const hit = cache.get(cwd)
-      if (hit !== undefined) return hit
+      if (hit !== undefined) {
+        yield* Effect.logDebug(`FffFinder cache hit for ${cwd}`)
+        return hit
+      }
+
+      yield* Effect.log(`FffFinder creating finder for ${cwd}`)
 
       if (!FileFinder.isAvailable()) {
         return yield* Effect.fail(
@@ -80,6 +85,8 @@ export class FffFinder extends Effect.Service<FffFinder>()("findfile/FffFinder",
         )
       }
 
+      yield* Effect.log(`FffFinder created for ${cwd}, waiting for scan...`)
+
       // Add to cache immediately so getScanProgress can report real
       // progress instead of the generic fallback while waitForScan runs.
       cache.set(cwd, created.value)
@@ -89,7 +96,9 @@ export class FffFinder extends Effect.Service<FffFinder>()("findfile/FffFinder",
       // the first search in the TUI appears broken (empty results).
       const warmup = created.value.waitForScan(30000)
       if (!warmup.ok || !warmup.value) {
-        console.error(`[fff] scan warmup timed out for ${cwd}`)
+        yield* Effect.logWarning(`FffFinder scan warmup timed out for ${cwd}`)
+      } else {
+        yield* Effect.log(`FffFinder scan complete for ${cwd}`)
       }
 
       return created.value
@@ -129,6 +138,7 @@ export class FffFinder extends Effect.Service<FffFinder>()("findfile/FffFinder",
     const getScanProgress = (cwd: SearchPath): ScanProgress => {
       const finder = cache.get(cwd)
       if (finder === undefined) {
+        Effect.runSync(Effect.logDebug(`getScanProgress: no finder cached for ${cwd}`))
         return {
           scannedFilesCount: 0,
           isScanning: true,
@@ -137,12 +147,17 @@ export class FffFinder extends Effect.Service<FffFinder>()("findfile/FffFinder",
         }
       }
       try {
-        const progress = (finder as unknown as {
+        const raw = (finder as unknown as {
           getScanProgress: () => { ok: true; value: ScanProgress } | { ok: false; error: string }
         }).getScanProgress()
-        if (progress.ok) return progress.value
+        Effect.runSync(Effect.logDebug(`getScanProgress for ${cwd}: ok=${raw.ok}`))
+        if (raw.ok) {
+          Effect.runSync(Effect.logDebug(`getScanProgress for ${cwd}: isScanning=${raw.value.isScanning} isWarmupComplete=${raw.value.isWarmupComplete} scanned=${raw.value.scannedFilesCount}`))
+          return raw.value
+        }
+        Effect.runSync(Effect.logWarning(`getScanProgress for ${cwd} failed: ${raw.error}`))
       } catch (e) {
-        console.error("[findfile] getScanProgress error:", e)
+        Effect.runSync(Effect.logWarning(`getScanProgress for ${cwd} threw: ${String(e)}`))
       }
       return {
         scannedFilesCount: 0,
