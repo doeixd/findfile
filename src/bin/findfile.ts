@@ -835,13 +835,11 @@ const AppLive = Layer.mergeAll(
   RgBackend.Default,
   FdBackend.Default,
   FffFinder.Default,
-).pipe(
-  Layer.provideMerge(BunContext.layer),
-  Layer.provide(FileLoggerLive),
-)
+).pipe(Layer.provideMerge(BunContext.layer))
 
 cli(process.argv).pipe(
   Effect.scoped,
   Effect.provide(AppLive),
-  BunRuntime.runMain,
+  Effect.provide(FileLoggerLive),
+  BunRuntime.runMain({ disablePrettyLogger: true }),
 )
