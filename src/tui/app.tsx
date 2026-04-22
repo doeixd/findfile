@@ -173,6 +173,16 @@ export const App = (props: AppProps) => {
       return
     }
 
+    // Breadcrumb path editing: let Enter go to the input's onSubmit,
+    // Escape cancels editing, everything else goes to the input.
+    if (props.state.breadcrumbEditing()) {
+      if (e.name === "escape") {
+        e.preventDefault()
+        props.state.setBreadcrumbEditing(false)
+      }
+      return
+    }
+
     // Query history navigation (when no overlay open)
     if (e.ctrl && e.name === "up") {
       e.preventDefault()
@@ -214,6 +224,8 @@ export const App = (props: AppProps) => {
           cwd={props.state.cwd()}
           onNavigate={(target) => props.state.setCwd(target)}
           visible={props.state.showBreadcrumbs()}
+          editing={props.state.breadcrumbEditing()}
+          setEditing={props.state.setBreadcrumbEditing}
         />
         <QueryInput state={props.state} />
         <box flexDirection="row" flexGrow={1} width="100%">

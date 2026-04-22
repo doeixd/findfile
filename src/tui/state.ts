@@ -8,7 +8,7 @@ import type { PreviewService, PreviewSlice } from "#core/preview/file.ts"
 import type { FffFinder } from "#core/backends/fff-finder.ts"
 import { makeDebouncedRunner } from "#core/query/debounce.ts"
 import { parseModifiedSince } from "#core/filter.ts"
-import type { Mode, ModeDefaults, SearchFilters, SearchPath, SearchResult } from "#core/schema.ts"
+import { SearchPath, type Mode, type ModeDefaults, type SearchFilters, type SearchResult } from "#core/schema.ts"
 import type { SubmitAction, SubmitActionName } from "./submit-action.ts"
 import { cycleSubmitAction } from "./submit-action.ts"
 
@@ -70,6 +70,9 @@ export interface AppState {
   /** Whether status bar is visible */
   readonly showStatusBar: Accessor<boolean>
   readonly toggleStatusBar: () => void
+  /** Whether breadcrumb path input is in edit mode */
+  readonly breadcrumbEditing: Accessor<boolean>
+  readonly setBreadcrumbEditing: Setter<boolean>
   /** Clean up all pending timers, fibers, and resources */
   readonly cleanup: () => void
 }
@@ -123,6 +126,7 @@ export const createAppState = (deps: AppDeps): AppState => {
   const [cwd, setCwd] = createSignal<string>(deps.cwd)
   const [showBreadcrumbs, setShowBreadcrumbs] = createSignal(layout?.showBreadcrumbs ?? true)
   const [showStatusBar, setShowStatusBar] = createSignal(layout?.showStatusBar ?? true)
+  const [breadcrumbEditing, setBreadcrumbEditing] = createSignal(false)
 
   const cycleSubmitActionImpl = () => {
     const current = submitAction().type
@@ -140,7 +144,7 @@ export const createAppState = (deps: AppDeps): AppState => {
   let wasScanning = true
   const pollScan = () => {
     try {
-      const progress = deps.finder.getScanProgress(deps.cwd)
+      const progress = deps.finder.getScanProgress(SearchPath.make(cwd()))
       setScanProgress(progress)
 
       // If scan just finished and we have a pending query with no results,
@@ -259,7 +263,7 @@ export const createAppState = (deps: AppDeps): AppState => {
     const stream = deps.router.search({
       text,
       mode: m,
-      cwd: deps.cwd,
+      cwd: SearchPath.make(cwd()),
       limit: deps.limit,
       grepMode: deps.modeDefaults[m]?.grepMode ?? "plain",
       ...(filters !== undefined ? { filters } : {}),
@@ -335,6 +339,34 @@ export const createAppState = (deps: AppDeps): AppState => {
     runSearch(query(), next)
     return next
   }) as Setter<Mode>
+
+  const boundSetCwd = (v: string): string => {
+    const next = setCwd(v)
+    // Pre-warm the finder for the new directory so the first search
+    // doesn't hit a cold index.
+    Runtime.runFork(deps.runtime)(
+      deps.finder.get(SearchPath.make(next)).pipe(
+        Effect.catchAll(() => Effect.succeed(undefined)),
+      ),
+    )
+    // Restart scan polling for the new cwd
+    if (pollScanTimeout !== null) {
+      clearTimeout(pollScanTimeout)
+      pollScanTimeout = null
+    }
+    wasScanning = true
+    pollScan()
+    // Re-run current query in the new directory
+    if (query().length > 0) {
+      runSearch(query(), mode())
+    } else {
+      setResults([])
+      setSelected(0)
+      setPreview(null)
+      setStatus("ready")
+    }
+    return next
+  }
 
   const moveSelection = (delta: number): void => {
     setSelected((i) => {
@@ -450,11 +482,13 @@ export const createAppState = (deps: AppDeps): AppState => {
     setSubmitAction,
     cycleSubmitAction: cycleSubmitActionImpl,
     cwd,
-    setCwd,
+    setCwd: boundSetCwd,
     showBreadcrumbs,
     toggleBreadcrumbs: () => setShowBreadcrumbs((v) => !v),
     showStatusBar,
     toggleStatusBar: () => setShowStatusBar((v) => !v),
+    breadcrumbEditing,
+    setBreadcrumbEditing,
     cleanup: () => {
       if (previewTimeout !== null) {
         clearTimeout(previewTimeout)

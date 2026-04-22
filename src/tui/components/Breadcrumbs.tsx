@@ -1,12 +1,14 @@
 import { For, Show, createSignal } from "solid-js"
 import { useTheme } from "../theme/syntax.ts"
-import { resolveColor, resolveSpacing, resolveBorderStyle } from "../theme/tokens.ts"
+import { resolveColor, resolveSpacing } from "../theme/tokens.ts"
 import path from "node:path"
 
 interface BreadcrumbsProps {
   cwd: string
   onNavigate: (target: string) => void
   visible: boolean
+  editing: boolean
+  setEditing: (v: boolean) => void
 }
 
 export const Breadcrumbs = (props: BreadcrumbsProps) => {
@@ -19,7 +21,6 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
   const padding = () => resolveSpacing(t(), "queryInput", "input", "padding", 1)
   const height = () => resolveSpacing(t(), "queryInput", "input", "height", 1)
 
-  const [isEditing, setIsEditing] = createSignal(false)
   const [editValue, setEditValue] = createSignal("")
 
   const segments = () => {
@@ -46,7 +47,7 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
 
   const startEdit = () => {
     setEditValue(props.cwd)
-    setIsEditing(true)
+    props.setEditing(true)
   }
 
   const confirmEdit = () => {
@@ -59,7 +60,11 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
         // invalid path, ignore
       }
     }
-    setIsEditing(false)
+    props.setEditing(false)
+  }
+
+  const cancelEdit = () => {
+    props.setEditing(false)
   }
 
   return (
@@ -74,7 +79,7 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
         width="100%"
       >
         <Show
-          when={isEditing()}
+          when={props.editing}
           fallback={
             <>
               <For each={segments()}>
@@ -84,7 +89,8 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
                       <text fg={fg()} dimColor> / </text>
                     </Show>
                     <text
-                      fg={fgHover()}
+                      fg={fg()}
+                      dimColor
                       onMouseDown={() => props.onNavigate(seg.target)}
                     >
                       {seg.label}
@@ -95,6 +101,7 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
               <box flexGrow={1} />
               <text
                 fg={fg()}
+                dimColor
                 onMouseDown={startEdit}
               >
                 [edit]
