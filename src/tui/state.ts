@@ -73,6 +73,9 @@ export interface AppState {
   /** Whether breadcrumb path input is in edit mode */
   readonly breadcrumbEditing: Accessor<boolean>
   readonly setBreadcrumbEditing: Setter<boolean>
+  /** Current value of the breadcrumb path input while editing */
+  readonly breadcrumbEditValue: Accessor<string>
+  readonly setBreadcrumbEditValue: Setter<string>
   /** Clean up all pending timers, fibers, and resources */
   readonly cleanup: () => void
 }
@@ -127,6 +130,7 @@ export const createAppState = (deps: AppDeps): AppState => {
   const [showBreadcrumbs, setShowBreadcrumbs] = createSignal(layout?.showBreadcrumbs ?? true)
   const [showStatusBar, setShowStatusBar] = createSignal(layout?.showStatusBar ?? true)
   const [breadcrumbEditing, setBreadcrumbEditing] = createSignal(false)
+  const [breadcrumbEditValue, setBreadcrumbEditValue] = createSignal("")
 
   const cycleSubmitActionImpl = () => {
     const current = submitAction().type
@@ -500,6 +504,8 @@ export const createAppState = (deps: AppDeps): AppState => {
     toggleStatusBar: () => setShowStatusBar((v) => !v),
     breadcrumbEditing,
     setBreadcrumbEditing,
+    breadcrumbEditValue,
+    setBreadcrumbEditValue,
     cleanup: () => {
       if (previewTimeout !== null) {
         clearTimeout(previewTimeout)

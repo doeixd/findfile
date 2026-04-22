@@ -1,6 +1,7 @@
 import { useKeyboard } from "@opentui/solid"
 import type { KeyEvent } from "@opentui/core"
 import { createSignal, Show } from "solid-js"
+import path from "node:path"
 import { QueryInput } from "./components/QueryInput.tsx"
 import { ResultsList } from "./components/ResultsList.tsx"
 import { PreviewPane } from "./components/PreviewPane.tsx"
@@ -173,11 +174,22 @@ export const App = (props: AppProps) => {
       return
     }
 
-    // Breadcrumb path editing: let Enter go to the input's onSubmit,
-    // Escape cancels editing, everything else goes to the input.
+    // Breadcrumb path editing: Enter confirms, Escape cancels.
+    // OpenTUI <input> doesn't support onSubmit, so we handle Enter here.
     if (props.state.breadcrumbEditing()) {
-      if (e.name === "escape") {
-        e.preventDefault()
+      e.preventDefault()
+      if (e.name === "return" || e.name === "enter") {
+        const v = props.state.breadcrumbEditValue().trim()
+        if (v.length > 0) {
+          try {
+            const resolved = path.resolve(v)
+            props.state.setCwd(resolved)
+          } catch {
+            // invalid path, ignore
+          }
+        }
+        props.state.setBreadcrumbEditing(false)
+      } else if (e.name === "escape") {
         props.state.setBreadcrumbEditing(false)
       }
       return
@@ -226,6 +238,8 @@ export const App = (props: AppProps) => {
           visible={props.state.showBreadcrumbs()}
           editing={props.state.breadcrumbEditing()}
           setEditing={props.state.setBreadcrumbEditing}
+          editValue={props.state.breadcrumbEditValue()}
+          setEditValue={props.state.setBreadcrumbEditValue}
         />
         <QueryInput state={props.state} />
         <box flexDirection="row" flexGrow={1} width="100%">

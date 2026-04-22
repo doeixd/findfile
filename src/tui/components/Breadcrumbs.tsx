@@ -1,7 +1,7 @@
-import { For, Show, createSignal } from "solid-js"
+import { For, Show } from "solid-js"
 import { useTheme } from "../theme/syntax.ts"
 import { resolveColor, resolveSpacing } from "../theme/tokens.ts"
-import path from "node:path"
+
 
 interface BreadcrumbsProps {
   cwd: string
@@ -9,6 +9,8 @@ interface BreadcrumbsProps {
   visible: boolean
   editing: boolean
   setEditing: (v: boolean) => void
+  editValue: string
+  setEditValue: (v: string) => void
 }
 
 export const Breadcrumbs = (props: BreadcrumbsProps) => {
@@ -20,8 +22,6 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
   const fgHover = () => resolveColor(t(), "results", "results", "fgLine", "#38bdf8")
   const padding = () => resolveSpacing(t(), "queryInput", "input", "padding", 1)
   const height = () => resolveSpacing(t(), "queryInput", "input", "height", 1)
-
-  const [editValue, setEditValue] = createSignal("")
 
   const segments = () => {
     const cwd = props.cwd
@@ -46,25 +46,8 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
   }
 
   const startEdit = () => {
-    setEditValue(props.cwd)
+    props.setEditValue(props.cwd)
     props.setEditing(true)
-  }
-
-  const confirmEdit = () => {
-    const v = editValue().trim()
-    if (v.length > 0) {
-      try {
-        const resolved = path.resolve(v)
-        props.onNavigate(resolved)
-      } catch {
-        // invalid path, ignore
-      }
-    }
-    props.setEditing(false)
-  }
-
-  const cancelEdit = () => {
-    props.setEditing(false)
   }
 
   return (
@@ -115,9 +98,8 @@ export const Breadcrumbs = (props: BreadcrumbsProps) => {
             backgroundColor={bg()}
             focusedBackgroundColor={bg()}
             cursorColor={fgHover()}
-            value={editValue()}
-            onInput={(v) => setEditValue(v)}
-            onSubmit={confirmEdit}
+            value={props.editValue}
+            onInput={(v) => props.setEditValue(v)}
           />
         </Show>
       </box>
